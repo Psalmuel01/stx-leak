@@ -1,40 +1,34 @@
 ;; counter.clar
-;; Public counter with interval-based reset.
+;; Permissionless counter. Backend bot can enforce wall-clock reset cadence off-chain.
 
 (define-constant ERR_UNDERFLOW (err u100))
-(define-constant ERR_TOO_EARLY (err u101))
-(define-constant RESET_INTERVAL_BLOCKS u100) ;; ~16.5 hours on 10 min block target
+(define-constant ERR_OVERFLOW (err u101))
 
-(define-data-var count int 0)
-(define-data-var last-reset-height uint u0)
+;; max uint in Clarity (u128 max)
+(define-constant MAX_COUNTER u340282366920938463463374607431768211455)
+
+(define-data-var count uint u0)
 
 (define-read-only (get-count)
   (ok (var-get count)))
 
-(define-read-only (get-next-reset-height)
-  (ok (+ (var-get last-reset-height) RESET_INTERVAL_BLOCKS)))
-
 (define-public (increment)
-  (begin
-    (var-set count (+ (var-get count) 1))
-    (ok (var-get count))))
+  (let ((current (var-get count)))
+    (if (is-eq current MAX_COUNTER)
+      ERR_OVERFLOW
+      (begin
+        (var-set count (+ current u1))
+        (ok (var-get count))))))
 
 (define-public (decrement)
   (let ((current (var-get count)))
-    (if (<= current 0)
+    (if (is-eq current u0)
       ERR_UNDERFLOW
       (begin
-        (var-set count (- current 1))
+        (var-set count (- current u1))
         (ok (var-get count))))))
 
 (define-public (reset-counter)
-  (let (
-    (current-height block-height)
-    (last-height (var-get last-reset-height))
-  )
-    (if (< current-height (+ last-height RESET_INTERVAL_BLOCKS))
-      ERR_TOO_EARLY
-      (begin
-        (var-set count 0)
-        (var-set last-reset-height current-height)
-        (ok (var-get count))))))
+  (begin
+    (var-set count u0)
+    (ok (var-get count))))

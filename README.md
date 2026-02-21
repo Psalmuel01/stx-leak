@@ -1,24 +1,24 @@
 # Stacks Counter Starter (Contract + Frontend + Automation Bot)
 
-This repo now contains a full starter stack for your goal:
+This repo contains a full starter stack for a **testnet-first** rollout:
 
-- **Clarity smart contract** (`contracts/counter.clar`) with:
+- **Clarity smart contract** (`contracts/counter.clar`) with permissionless:
   - `increment`
   - `decrement`
-  - `reset-counter` (interval-gated by block height)
-- **Frontend UI** (`frontend/`) with Stacks wallet connect + write interactions
-- **Backend bot** (`backend/`) that runs every 10 minutes (configurable) and randomly calls one write function.
+  - `reset-counter`
+- **Frontend UI** (`frontend/`) built with lightweight **Vite + React** and Stacks wallet connect for manual writes.
+- **Backend bot** (`backend/`) that runs on a strict wall-clock cadence and randomly calls one write method (`increment`, `decrement`, or `reset-counter`).
+- Backend defaults to **testnet** and only switches to mainnet when `STACKS_NETWORK=mainnet`.
 
-## 1) Smart contract
+## 1) Smart contract behavior
 
-The contract keeps:
-- `count` (int)
-- `last-reset-height` (uint)
-- `RESET_INTERVAL_BLOCKS` default `u100`
+The contract keeps a single `count` (`uint`) and is fully permissionless.
 
-`reset-counter` can only be called once enough blocks have passed.
+Safety checks included:
+- `decrement` returns `ERR_UNDERFLOW` when `count` is already `u0`
+- `increment` returns `ERR_OVERFLOW` when `count` is at max `u128`
 
-> If you specifically mean a newer Clarity/epoch target than configured in `Clarinet.toml`, update `clarity_version` and `epoch` to match your target chain environment.
+`reset-counter` is immediate and ungated on-chain so cadence is controlled by the backend scheduler.
 
 ## 2) Local setup
 
@@ -54,24 +54,18 @@ npm run -w frontend dev
 
 ## 3) Deployment flow (high-level)
 
-1. Deploy `contracts/counter.clar` to testnet/mainnet.
+1. Deploy `contracts/counter.clar` to **testnet** first.
 2. Put deployed `<address>` + `<contract-name>` in both `.env` files.
-3. Start backend bot service (PM2, Docker, or systemd).
-4. Start frontend and connect wallet to call functions manually.
+3. Start backend bot service with your target cadence (PM2, Docker, systemd, or Render worker).
+4. Deploy frontend (Vercel/Render static site) and connect wallet for manual calls.
 
-## 4) Recommended next steps
+## 4) Hosting target recommendations
 
-- Add Clarinet tests for function behavior and interval gate.
-- Add bot guards (skip `decrement` when counter is 0 by querying read-only state first).
-- Add observability (structured logs + alerting).
-- Add API layer for frontend read-only data caching.
+- **Frontend:** Vercel or Render Static Site
+- **Backend bot:** Render Background Worker (or another long-running worker platform)
 
-## Open questions for you
+## 5) Production hardening ideas
 
-1. **Network target**: testnet first or directly mainnet?
-2. **Reset policy**: keep block-based interval or use a strict wall-clock cadence driven by backend bot?
-3. **Bot authority**: should only your backend wallet call `reset-counter`, or keep all methods permissionless?
-4. **Frontend stack preference**: keep lightweight Vite React, or move to Next.js?
-5. **Hosting target**: where do you want frontend + backend deployed (Vercel/Fly/Render/AWS)?
-
-Once you answer these, I can tighten this into a production-ready setup (auth strategy, deploy scripts, and CI).
+- Add Clarinet tests for overflow/underflow and reset behavior.
+- Add transaction result tracking (poll tx status and log `success` vs contract `err`).
+- Add monitoring/alerts for bot failures and stalled cadence.

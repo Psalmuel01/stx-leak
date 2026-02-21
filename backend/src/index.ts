@@ -4,16 +4,21 @@ import { StacksMainnet, StacksTestnet } from '@stacks/network';
 import {
   AnchorMode,
   PostConditionMode,
-  makeContractCall,
   broadcastTransaction,
+  makeContractCall,
 } from '@stacks/transactions';
 
 const privateKey = process.env.STACKS_PRIVATE_KEY;
 const contractAddress = process.env.CONTRACT_ADDRESS;
 const contractName = process.env.CONTRACT_NAME ?? 'counter';
 const intervalMs = Number(process.env.AUTOMATION_INTERVAL_MS ?? '600000');
-const apiUrl = process.env.STACKS_API_URL;
-const networkName = process.env.STACKS_NETWORK ?? 'testnet';
+const requestedNetwork = (process.env.STACKS_NETWORK ?? 'testnet').toLowerCase();
+const networkName = requestedNetwork === 'mainnet' ? 'mainnet' : 'testnet';
+
+const defaultApiUrl = networkName === 'mainnet'
+  ? 'https://api.hiro.so'
+  : 'https://api.testnet.hiro.so';
+const apiUrl = process.env.STACKS_API_URL ?? defaultApiUrl;
 
 if (!privateKey || !contractAddress) {
   throw new Error('Missing required env vars: STACKS_PRIVATE_KEY and CONTRACT_ADDRESS');
@@ -22,6 +27,10 @@ if (!privateKey || !contractAddress) {
 const network = networkName === 'mainnet'
   ? new StacksMainnet({ url: apiUrl })
   : new StacksTestnet({ url: apiUrl });
+
+if (requestedNetwork !== networkName) {
+  console.warn(`Unknown STACKS_NETWORK="${requestedNetwork}". Falling back to testnet.`);
+}
 
 type Method = 'increment' | 'decrement' | 'reset-counter';
 const methods: Method[] = ['increment', 'decrement', 'reset-counter'];
@@ -57,6 +66,7 @@ async function runCycle() {
   }
 }
 
-console.log(`Counter bot started. interval=${intervalMs}ms network=${networkName}`);
+console.log(`Counter bot started. network=${networkName} api=${apiUrl} cadence=${intervalMs}ms`);
+console.log(`Enabled methods: ${methods.join(', ')}`);
 void runCycle();
 setInterval(() => void runCycle(), intervalMs);
