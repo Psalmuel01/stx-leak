@@ -1,0 +1,11 @@
+[project]
+name = "stx-leak"
+authors = ["you"]
+description = "Counter contract + app stack"
+telemetry = false
+cache_dir = ".clarinet"
+
+[contracts.counter]
+path = "contracts/counter.clar"
+clarity_version = 3
+epoch = 3.0

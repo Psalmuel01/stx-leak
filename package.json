@@ -1,0 +1,17 @@
+{
+  "name": "stx-counter-monorepo",
+  "private": true,
+  "version": "0.1.0",
+  "workspaces": [
+    "frontend",
+    "backend"
+  ],
+  "scripts": {
+    "build": "npm run -w frontend build && npm run -w backend build",
+    "dev": "concurrently \"npm run -w frontend dev\" \"npm run -w backend dev\"",
+    "check": "npm run -w backend typecheck && npm run -w frontend typecheck"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2"
+  }
+}
