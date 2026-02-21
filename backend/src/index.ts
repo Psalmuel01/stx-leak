@@ -1,6 +1,6 @@
 import 'dotenv/config';
 import { randomInt } from 'node:crypto';
-import { StacksMainnet, StacksTestnet } from '@stacks/network';
+import { STACKS_MAINNET, STACKS_TESTNET } from '@stacks/network';
 import {
   AnchorMode,
   PostConditionMode,
@@ -24,9 +24,12 @@ if (!privateKey || !contractAddress) {
   throw new Error('Missing required env vars: STACKS_PRIVATE_KEY and CONTRACT_ADDRESS');
 }
 
+const pk: string = privateKey;
+const ca: string = contractAddress;
+
 const network = networkName === 'mainnet'
-  ? new StacksMainnet({ url: apiUrl })
-  : new StacksTestnet({ url: apiUrl });
+  ? STACKS_MAINNET
+  : STACKS_TESTNET;
 
 if (requestedNetwork !== networkName) {
   console.warn(`Unknown STACKS_NETWORK="${requestedNetwork}". Falling back to testnet.`);
@@ -37,14 +40,13 @@ const methods: Method[] = ['increment', 'decrement', 'reset-counter'];
 
 async function invoke(method: Method) {
   const tx = await makeContractCall({
-    contractAddress,
+    contractAddress: ca,
     contractName,
     functionName: method,
     functionArgs: [],
-    senderKey: privateKey,
+    senderKey: pk,
     network,
     postConditionMode: PostConditionMode.Allow,
-    anchorMode: AnchorMode.Any,
     fee: 3000n,
   });
 

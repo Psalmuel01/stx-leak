@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { AppConfig, UserSession, showConnect, openContractCall } from '@stacks/connect';
-import { StacksMainnet, StacksTestnet } from '@stacks/network';
+import { STACKS_MAINNET, STACKS_TESTNET } from '@stacks/network';
 
 const networkName = import.meta.env.VITE_STACKS_NETWORK ?? 'testnet';
 const contractAddress = import.meta.env.VITE_CONTRACT_ADDRESS ?? '';
@@ -16,8 +16,8 @@ export function App() {
   const [loading, setLoading] = useState(false);
 
   const network = useMemo(
-    () => (networkName === 'mainnet' ? new StacksMainnet() : new StacksTestnet()),
-    [],
+    () => (networkName === 'mainnet' ? STACKS_MAINNET : STACKS_TESTNET),
+    [networkName],
   );
 
   const connectWallet = () => {
