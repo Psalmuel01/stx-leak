@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { connect, disconnect, getLocalStorage, request } from '@stacks/connect';
+import { cvToValue, hexToCV } from '@stacks/transactions';
 
 type StacksNetwork = 'mainnet' | 'testnet';
 
@@ -22,16 +23,67 @@ export function App() {
   const [network, setNetwork] = useState<StacksNetwork>(defaultNetwork);
   const [stxAddress, setStxAddress] = useState('');
   const [lastTxId, setLastTxId] = useState('');
+  const [counterValue, setCounterValue] = useState<string>('0');
+  const [counterError, setCounterError] = useState('');
   const [loading, setLoading] = useState(false);
 
   const contractAddress = useMemo(() => contractAddresses[network], [network]);
   const apiBase = useMemo(() => apiBases[network], [network]);
+  const txExplorerLink = useMemo(() => {
+    if (!lastTxId) return '';
+    return `https://explorer.hiro.so/txid/${lastTxId}?chain=${network}`;
+  }, [lastTxId, network]);
 
   useEffect(() => {
     const localData = getLocalStorage();
     const localAddress = localData?.addresses?.stx?.find(entry => entry.symbol?.toLowerCase() === network)?.address;
     setStxAddress(localAddress ?? '');
   }, [network]);
+
+  const readCounter = async () => {
+    if (!contractAddress) return;
+
+    const senderAddress = stxAddress || contractAddress;
+
+    try {
+      const response = await fetch(`${apiBase}/v2/contracts/call-read/${contractAddress}/${contractName}/get-count`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          sender: senderAddress,
+          arguments: [],
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Read-only call failed with status ${response.status}`);
+      }
+
+      const data = (await response.json()) as { okay: boolean; result?: string; cause?: string };
+      if (!data.okay || !data.result) {
+        throw new Error(data.cause ?? 'Read-only call failed');
+      }
+
+      const cv = hexToCV(data.result);
+      const value = cvToValue(cv);
+      setCounterValue(String(value));
+      setCounterError('');
+    } catch (error) {
+      console.error('Failed to read counter', error);
+      setCounterError('Unable to load current counter value');
+    }
+  };
+
+  useEffect(() => {
+    void readCounter();
+    const intervalId = window.setInterval(() => {
+      void readCounter();
+    }, 10000);
+
+    return () => window.clearInterval(intervalId);
+  }, [network, contractAddress, stxAddress]);
 
   const connectWallet = async () => {
     try {
@@ -65,6 +117,7 @@ export function App() {
       });
 
       setLastTxId(result.txid ?? '');
+      await readCounter();
     } finally {
       setLoading(false);
     }
@@ -118,10 +171,21 @@ export function App() {
           <button disabled={loading || !stxAddress || !contractAddress} onClick={() => void callWrite('reset-counter')}>Reset</button>
         </div>
 
+        <div className="meta-grid">
+          <p>
+            Counter Value
+            <code>{counterError ? counterError : counterValue}</code>
+          </p>
+          <p>
+            Sync
+            <button className="ghost" disabled={!contractAddress} onClick={() => void readCounter()}>Refresh</button>
+          </p>
+        </div>
+
         {lastTxId && (
           <p className="tx-row">
             Last TX
-            <a href={`${apiBase}/extended/v1/tx/${lastTxId}`} target="_blank" rel="noreferrer">
+            <a href={txExplorerLink} target="_blank" rel="noreferrer">
               {lastTxId}
             </a>
           </p>
