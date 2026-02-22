@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { connect, disconnect, getLocalStorage, request } from '@stacks/connect';
-import { cvToValue, hexToCV } from '@stacks/transactions';
+import { STACKS_MAINNET, STACKS_TESTNET } from '@stacks/network';
+import { cvToValue, fetchCallReadOnlyFunction } from '@stacks/transactions';
 
 type StacksNetwork = 'mainnet' | 'testnet';
 
@@ -29,6 +30,10 @@ export function App() {
 
   const contractAddress = useMemo(() => contractAddresses[network], [network]);
   const apiBase = useMemo(() => apiBases[network], [network]);
+  const stacksNetwork = useMemo(
+    () => (network === 'mainnet' ? STACKS_MAINNET : STACKS_TESTNET),
+    [network]
+  );
   const txExplorerLink = useMemo(() => {
     if (!lastTxId) return '';
     return `https://explorer.hiro.so/txid/${lastTxId}?chain=${network}`;
@@ -46,28 +51,16 @@ export function App() {
     const senderAddress = stxAddress || contractAddress;
 
     try {
-      const response = await fetch(`${apiBase}/v2/contracts/call-read/${contractAddress}/${contractName}/get-count`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          sender: senderAddress,
-          arguments: [],
-        }),
+      const result = await fetchCallReadOnlyFunction({
+        contractAddress,
+        contractName,
+        functionName: 'get-count',
+        functionArgs: [],
+        network: stacksNetwork,
+        senderAddress,
       });
 
-      if (!response.ok) {
-        throw new Error(`Read-only call failed with status ${response.status}`);
-      }
-
-      const data = (await response.json()) as { okay: boolean; result?: string; cause?: string };
-      if (!data.okay || !data.result) {
-        throw new Error(data.cause ?? 'Read-only call failed');
-      }
-
-      const cv = hexToCV(data.result);
-      const value = cvToValue(cv);
+      const value = cvToValue(result);
       setCounterValue(String(value));
       setCounterError('');
     } catch (error) {
