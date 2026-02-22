@@ -145,31 +145,3 @@ code {
 a {
   color: #95b4ff;
 }
-
-
-.counter-card {
-  margin-top: 1rem;
-  padding: 0.9rem 1rem;
-  border-radius: 12px;
-  border: 1px solid rgba(123, 146, 255, 0.3);
-  background: rgba(18, 30, 65, 0.75);
-}
-
-.counter-card p {
-  margin: 0;
-  font-size: 0.8rem;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: #9eb2ff;
-}
-
-.counter-card strong {
-  display: block;
-  margin-top: 0.35rem;
-  font-size: clamp(1.8rem, 5vw, 2.5rem);
-  color: #ffffff;
-}
-
-.counter-card small {
-  color: #ff9fa8;
-}

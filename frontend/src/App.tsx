@@ -1,14 +1,9 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { connect, disconnect, getLocalStorage, request } from '@stacks/connect';
-import { cvToValue, hexToCV } from '@stacks/transactions';
 
 type StacksNetwork = 'mainnet' | 'testnet';
-type ContractAction = 'increment' | 'decrement' | 'reset-counter';
 
-type ReadOnlyResponse = {
-  okay: boolean;
-  result: string;
-};
+type ContractAction = 'increment' | 'decrement' | 'reset-counter';
 
 const defaultNetwork = (import.meta.env.VITE_STACKS_NETWORK ?? 'testnet') as StacksNetwork;
 const contractName = import.meta.env.VITE_CONTRACT_NAME ?? 'counter';
@@ -23,85 +18,20 @@ const apiBases: Record<StacksNetwork, string> = {
   testnet: import.meta.env.VITE_STACKS_API_BASE_TESTNET ?? import.meta.env.VITE_STACKS_API_BASE ?? 'https://api.testnet.hiro.so',
 };
 
-const explorers: Record<StacksNetwork, string> = {
-  mainnet: 'https://explorer.hiro.so/txid',
-  testnet: 'https://explorer.hiro.so/txid',
-};
-
-function normalizeCounterValue(value: unknown): string {
-  if (typeof value === 'bigint' || typeof value === 'number' || typeof value === 'string') {
-    return value.toString();
-  }
-
-  if (value && typeof value === 'object') {
-    const candidate = value as { value?: unknown };
-    if (candidate.value !== undefined) return normalizeCounterValue(candidate.value);
-  }
-
-  return '0';
-}
-
 export function App() {
   const [network, setNetwork] = useState<StacksNetwork>(defaultNetwork);
   const [stxAddress, setStxAddress] = useState('');
   const [lastTxId, setLastTxId] = useState('');
-  const [counter, setCounter] = useState('0');
-  const [counterLoading, setCounterLoading] = useState(false);
-  const [counterError, setCounterError] = useState('');
   const [loading, setLoading] = useState(false);
 
   const contractAddress = useMemo(() => contractAddresses[network], [network]);
   const apiBase = useMemo(() => apiBases[network], [network]);
-  const explorerTxUrl = useMemo(
-    () => (lastTxId ? `${explorers[network]}/${lastTxId}?chain=${network}` : ''),
-    [lastTxId, network],
-  );
 
   useEffect(() => {
     const localData = getLocalStorage();
     const localAddress = localData?.addresses?.stx?.find(entry => entry.symbol?.toLowerCase() === network)?.address;
     setStxAddress(localAddress ?? '');
   }, [network]);
-
-  const fetchCounter = useCallback(async () => {
-    if (!contractAddress) {
-      setCounter('0');
-      setCounterError(`Missing ${network} contract address`);
-      return;
-    }
-
-    setCounterLoading(true);
-    setCounterError('');
-
-    try {
-      const sender = stxAddress || contractAddress;
-      const response = await fetch(
-        `${apiBase}/v2/contracts/call-read/${contractAddress}/${contractName}/get-count`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ sender, arguments: [] }),
-        },
-      );
-
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-
-      const data = (await response.json()) as ReadOnlyResponse;
-      if (!data.okay) throw new Error('Read-only call failed');
-
-      const parsed = cvToValue(hexToCV(data.result));
-      setCounter(normalizeCounterValue(parsed));
-    } catch (error) {
-      setCounterError('Unable to read counter');
-      console.error(error);
-    } finally {
-      setCounterLoading(false);
-    }
-  }, [apiBase, contractAddress, network, stxAddress]);
-
-  useEffect(() => {
-    void fetchCounter();
-  }, [fetchCounter]);
 
   const connectWallet = async () => {
     try {
@@ -112,7 +42,6 @@ export function App() {
       });
       const address = result.addresses[0]?.address ?? '';
       setStxAddress(address);
-      await fetchCounter();
     } catch (error) {
       console.error('Wallet connection canceled or failed', error);
     }
@@ -136,7 +65,6 @@ export function App() {
       });
 
       setLastTxId(result.txid ?? '');
-      await fetchCounter();
     } finally {
       setLoading(false);
     }
@@ -157,12 +85,6 @@ export function App() {
               <option value="mainnet">Mainnet</option>
             </select>
           </label>
-        </div>
-
-        <div className="counter-card">
-          <p>Current Counter</p>
-          <strong>{counterLoading ? 'Loading…' : counter}</strong>
-          {counterError && <small>{counterError}</small>}
         </div>
 
         <div className="meta-grid">
@@ -199,7 +121,7 @@ export function App() {
         {lastTxId && (
           <p className="tx-row">
             Last TX
-            <a href={explorerTxUrl} target="_blank" rel="noreferrer">
+            <a href={`${apiBase}/extended/v1/tx/${lastTxId}`} target="_blank" rel="noreferrer">
               {lastTxId}
             </a>
           </p>
