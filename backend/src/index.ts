@@ -9,111 +9,102 @@ import {
   makeContractCall,
 } from '@stacks/transactions';
 
-const app = express();
-app.use(express.json());
+/* ------------------ NETWORK CONFIG ------------------ */
 
+// Cadence per network
+const cadence = {
+  mainnet: 10 * 60 * 1000, // 10 minutes
+  testnet: 2 * 60 * 1000,  // 2 minutes
+};
 
-const PORT = Number(process.env.PORT || 3000);
-const intervalMs = Number(process.env.AUTOMATION_INTERVAL_MS ?? '300000');
+// Network configs
+const networks = {
+  mainnet: {
+    name: 'mainnet',
+    privateKey: process.env.STACKS_PRIVATE_KEY_MAINNET!,
+    contractAddress: process.env.CONTRACT_ADDRESS_MAINNET!,
+    networkObj: STACKS_MAINNET,
+  },
+  testnet: {
+    name: 'testnet',
+    privateKey: process.env.STACKS_PRIVATE_KEY_TESTNET!,
+    contractAddress: process.env.CONTRACT_ADDRESS_TESTNET!,
+    networkObj: STACKS_TESTNET,
+  },
+};
 
-const privateKey = process.env.STACKS_PRIVATE_KEY;
-const contractAddress = process.env.CONTRACT_ADDRESS;
 const contractName = process.env.CONTRACT_NAME ?? 'counter';
-const requestedNetwork = (process.env.STACKS_NETWORK ?? 'testnet').toLowerCase();
-const networkName = requestedNetwork === 'mainnet' ? 'mainnet' : 'testnet';
 
-if (!privateKey || !contractAddress) {
-  throw new Error(
-    'Missing required env vars: STACKS_PRIVATE_KEY and CONTRACT_ADDRESS'
-  );
+for (const key of Object.keys(networks)) {
+  const net = networks[key as 'mainnet' | 'testnet'];
+  if (!net.privateKey || !net.contractAddress) {
+    throw new Error(`Missing private key or contract address for ${net.name}`);
+  }
 }
 
-const pk: string = privateKey;
-const ca: string = contractAddress;
-
-
-const network =
-  networkName === 'mainnet' ? STACKS_MAINNET : STACKS_TESTNET;
-
+/* ------------------ BOT LOGIC ------------------ */
 type Method = 'increment' | 'decrement' | 'reset-counter';
 const methods: Method[] = ['increment', 'decrement', 'reset-counter'];
 
-
-async function invoke(method: Method) {
-  const tx = await makeContractCall({
-    contractAddress: ca,
-    contractName,
-    functionName: method,
-    functionArgs: [],
-    senderKey: pk,
-    network,
-    postConditionMode: PostConditionMode.Allow,
-    fee: 3000n,
-  });
-
-  const response = await broadcastTransaction({
-    transaction: tx,
-    network,
-  });
-
-  if ('error' in response) {
-    throw new Error(`${method} failed: ${response.error}`);
-  }
-
-  console.log(
-    `[${new Date().toISOString()}] ${method} tx: ${response.txid}`
-  );
-
-  return response.txid;
-}
-
-async function runCycle() {
-  const selected = methods[randomInt(methods.length)];
+async function invoke(
+  method: Method,
+  netName: 'mainnet' | 'testnet'
+) {
+  const net = networks[netName];
   try {
-    await invoke(selected);
-  } catch (error) {
-    console.error(
-      `[${new Date().toISOString()}] ${selected} failed`,
-      error
-    );
-  }
-}
+    const tx = await makeContractCall({
+      contractAddress: net.contractAddress,
+      contractName,
+      functionName: method,
+      functionArgs: [],
+      senderKey: net.privateKey,
+      network: net.networkObj,
+      postConditionMode: PostConditionMode.Allow,
+      fee: 3000n,
+    });
 
+    const response = await broadcastTransaction({ transaction: tx, network: net.networkObj });
 
-// Manual trigger from frontend
-app.post('/call', async (req, res) => {
-  try {
-    const { method } = req.body as { method: Method };
-
-    if (!methods.includes(method)) {
-      return res.status(400).json({ error: 'Invalid method' });
+    if ('error' in response) {
+      console.error(`[${new Date().toISOString()}] ${net.name} ${method} failed`, response);
+      return;
     }
 
-    const txid = await invoke(method);
-    res.json({ success: true, txid });
+    console.log(
+      `[${new Date().toISOString()}] ${net.name} ${method} tx: ${response.txid}`
+    );
   } catch (err: any) {
-    res.status(500).json({ success: false, error: err.message });
+    console.error(`[${new Date().toISOString()}] ${net.name} ${method} error`, err.message);
   }
-});
+}
+
+async function runCycle(netName: 'mainnet' | 'testnet') {
+  const selected = methods[randomInt(methods.length)];
+  await invoke(selected, netName);
+}
+
+/* ------------------ EXPRESS & PORT ------------------ */
+const app = express();
+const PORT = Number(process.env.PORT || 3000);
 
 // Health check for Render
 app.get('/health', (_, res) => {
   res.json({
     status: 'ok',
-    network: networkName,
-    cadenceMs: intervalMs,
+    networks: Object.keys(networks),
+    cadence: { mainnet: cadence.mainnet, testnet: cadence.testnet },
+    contract: `${contractName}`,
   });
 });
 
-
+/* ------------------ START SERVER & BOT ------------------ */
 app.listen(PORT, () => {
-  console.log(`Counter service running on port ${PORT}`);
-  console.log(
-    `Network=${networkName} | cadence=${intervalMs}ms | contract=${contractAddress}.${contractName}`
-  );
+  console.log(`Counter bot webservice listening on port ${PORT}`);
+  console.log(`Contract=${contractName} | Mainnet cadence=${cadence.mainnet}ms | Testnet cadence=${cadence.testnet}ms`);
 
-  runCycle();
-  setInterval(() => {
-    runCycle();
-  }, intervalMs);
+  // Start autonomous loops
+  for (const netName of Object.keys(networks) as ('mainnet' | 'testnet')[]) {
+    void runCycle(netName); // initial run
+    setInterval(() => void runCycle(netName), cadence[netName]);
+  }
 });
