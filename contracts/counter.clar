@@ -1,7 +1,6 @@
 ;; counter.clar
 ;; Permissionless counter. Backend bot can enforce wall-clock reset cadence off-chain.
 
-(define-constant ERR_UNDERFLOW (err u100))
 (define-constant ERR_OVERFLOW (err u101))
 
 ;; max uint in Clarity (u128 max)
@@ -19,14 +18,18 @@
       (begin
         (var-set count (+ current u1))
         (ok (var-get count))))))
-
+        
 (define-public (decrement)
   (let ((current (var-get count)))
     (if (is-eq current u0)
-      ERR_UNDERFLOW
-      (begin
-        (var-set count (- current u1))
-        (ok (var-get count))))))
+        (ok u0)
+        (let ((new (- current u1)))
+          (var-set count new)
+          (ok new)
+        )
+    )
+  )
+)
 
 (define-public (reset-counter)
   (begin
