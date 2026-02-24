@@ -3,9 +3,10 @@ import express from 'express';
 import { randomInt } from 'node:crypto';
 import { STACKS_MAINNET, STACKS_TESTNET } from '@stacks/network';
 import {
-  AnchorMode,
   PostConditionMode,
   broadcastTransaction,
+  cvToValue,
+  fetchCallReadOnlyFunction,
   makeContractCall,
 } from '@stacks/transactions';
 
@@ -83,6 +84,20 @@ async function runCycle(netName: 'mainnet' | 'testnet') {
   await invoke(selected, netName);
 }
 
+async function readCounter(netName: 'mainnet' | 'testnet') {
+  const net = networks[netName];
+  const result = await fetchCallReadOnlyFunction({
+    contractAddress: net.contractAddress,
+    contractName,
+    functionName: 'get-count',
+    functionArgs: [],
+    network: net.networkObj,
+    senderAddress: net.contractAddress,
+  });
+
+  return String(cvToValue(result));
+}
+
 /* ------------------ EXPRESS & PORT ------------------ */
 const app = express();
 const PORT = Number(process.env.PORT || 3000);
@@ -95,6 +110,22 @@ app.get('/health', (_, res) => {
     cadence: { mainnet: cadence.mainnet, testnet: cadence.testnet },
     contract: `${contractName}`,
   });
+});
+
+app.get('/counter/:network', async (req, res) => {
+  const requested = req.params.network;
+  if (requested !== 'mainnet' && requested !== 'testnet') {
+    res.status(400).json({ error: 'network must be "mainnet" or "testnet"' });
+    return;
+  }
+
+  try {
+    const count = await readCounter(requested);
+    res.json({ network: requested, contract: `${networks[requested].contractAddress}.${contractName}`, count });
+  } catch (error) {
+    console.error(`[${new Date().toISOString()}] ${requested} read error`, error);
+    res.status(502).json({ error: 'Unable to read counter from Stacks API' });
+  }
 });
 
 /* ------------------ START SERVER & BOT ------------------ */
