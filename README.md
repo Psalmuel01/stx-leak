@@ -8,6 +8,9 @@ This repo contains a full starter stack for a **testnet-first** rollout:
   - `reset-counter`
 - **Frontend UI** (`frontend/`) built with lightweight **Vite + React** and Stacks wallet connect for manual writes.
 - **Backend bot** (`backend/`) that runs on a strict wall-clock cadence and randomly calls one write method (`increment`, `decrement`, or `reset-counter`).
+- **Stacks SDK usage**:
+  - `@stacks/connect` is used in the frontend for wallet connection + contract-call requests.
+  - `@stacks/transactions` is used in both frontend and backend for Clarity read-only function calls and backend contract-call broadcasting.
 - Backend defaults to **testnet** and only switches to mainnet when `STACKS_NETWORK=mainnet`.
 
 ## 1) Smart contract behavior
@@ -64,7 +67,13 @@ npm run -w frontend dev
 - **Frontend:** Vercel or Render Static Site
 - **Backend bot:** Render Background Worker (or another long-running worker platform)
 
-## 5) Production hardening ideas
+## 5) Backend endpoints
+
+- `GET /health` returns service status and cadence config.
+- `GET /counter/:network` reads the on-chain counter value using `@stacks/transactions` read-only calls.
+  - Valid network values: `mainnet`, `testnet`.
+
+## 6) Production hardening ideas
 
 - Add Clarinet tests for overflow/underflow and reset behavior.
 - Add transaction result tracking (poll tx status and log `success` vs contract `err`).
